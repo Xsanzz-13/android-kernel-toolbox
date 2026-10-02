@@ -1,0 +1,51 @@
+name: Analyze Kernel Module
+
+on:
+  workflow_dispatch:
+    inputs:
+      module_url:
+        description: "Direct URL to the .ko file"
+        required: true
+        type: string
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install analysis tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binutils-aarch64-linux-gnu llvm file
+
+      - name: Download kernel module
+        env:
+          MODULE_URL: ${{ inputs.module_url }}
+        run: |
+          curl -fL --retry 3 "$MODULE_URL" -o module.ko
+          file module.ko
+          ls -lh module.ko
+
+      - name: Analyze ELF
+        run: |
+          mkdir -p analysis/disassembly
+
+          readelf -h module.ko > analysis/elf-header.txt
+          readelf -S module.ko > analysis/sections.txt
+          readelf -Ws module.ko > analysis/symbols.txt
+          readelf -p .modinfo module.ko > analysis/modinfo.txt || true
+          aarch64-linux-gnu-readelf -r module.ko > analysis/relocations.txt
+          strings -a -n 4 module.ko > analysis/strings.txt
+
+          aarch64-linux-gnu-objdump -t module.ko > analysis/symbol-table.txt
+          aarch64-linux-gnu-objdump -d module.ko > analysis/disassembly/full.txt
+
+      - name: Extract function list
+        run: |
+          awk '$4 == "F" {print}' analysis/symbol-table.txt > analysis/functions.txt || true
+
+      - name: Upload analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-module-analysis
+          path: analysis/
