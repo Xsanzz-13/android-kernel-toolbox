@@ -42,7 +42,7 @@ jobs:
 
       - name: Extract function list
         run: |
-          awk '$4 == "F" {print}' analysis/symbol-table.txt > analysis/functions.txt || true
+          readelf -Ws module.ko | awk '$4 == "FUNC" {print}' > analysis/functions.txt || true
 
       - name: Upload analysis
         uses: actions/upload-artifact@v4
